@@ -1,0 +1,250 @@
+import java.util.*;
+
+public class QuizClashLeaderboard {
+
+    static class Node {
+        int score;
+        int height;
+        int size;       // subtree size
+
+        Node left, right;
+
+        Node(int score) {
+            this.score = score;
+            this.height = 1;
+            this.size = 1;
+        }
+    }
+
+    private Node root;
+
+    // ---------- Utility ----------
+
+    private int height(Node n) {
+        return n == null ? 0 : n.height;
+    }
+
+    private int size(Node n) {
+        return n == null ? 0 : n.size;
+    }
+
+    private void update(Node n) {
+        if (n == null) return;
+
+        n.height = 1 + Math.max(height(n.left), height(n.right));
+        n.size = 1 + size(n.left) + size(n.right);
+    }
+
+    private int balanceFactor(Node n) {
+        return height(n.left) - height(n.right);
+    }
+
+    // ---------- AVL Rotations ----------
+
+    private Node rightRotate(Node y) {
+        Node x = y.left;
+        Node t2 = x.right;
+
+        x.right = y;
+        y.left = t2;
+
+        update(y);
+        update(x);
+
+        return x;
+    }
+
+    private Node leftRotate(Node x) {
+        Node y = x.right;
+        Node t2 = y.left;
+
+        y.left = x;
+        x.right = t2;
+
+        update(x);
+        update(y);
+
+        return y;
+    }
+
+    private Node rebalance(Node node) {
+
+        update(node);
+
+        int bf = balanceFactor(node);
+
+        // LL
+        if (bf > 1 && balanceFactor(node.left) >= 0)
+            return rightRotate(node);
+
+        // LR
+        if (bf > 1 && balanceFactor(node.left) < 0) {
+            node.left = leftRotate(node.left);
+            return rightRotate(node);
+        }
+
+        // RR
+        if (bf < -1 && balanceFactor(node.right) <= 0)
+            return leftRotate(node);
+
+        // RL
+        if (bf < -1 && balanceFactor(node.right) > 0) {
+            node.right = rightRotate(node.right);
+            return leftRotate(node);
+        }
+
+        return node;
+    }
+
+    // ---------- Insert ----------
+
+    public void insert(int score) {
+        root = insert(root, score);
+    }
+
+    private Node insert(Node node, int score) {
+
+        if (node == null)
+            return new Node(score);
+
+        if (score < node.score)
+            node.left = insert(node.left, score);
+        else if (score > node.score)
+            node.right = insert(node.right, score);
+        else
+            return node; // duplicate ignored
+
+        return rebalance(node);
+    }
+
+    // ---------- Delete ----------
+
+    public void delete(int score) {
+        root = delete(root, score);
+    }
+
+    private Node delete(Node node, int score) {
+
+        if (node == null)
+            return null;
+
+        if (score < node.score) {
+            node.left = delete(node.left, score);
+        }
+        else if (score > node.score) {
+            node.right = delete(node.right, score);
+        }
+        else {
+
+            if (node.left == null || node.right == null) {
+                node = (node.left != null) ? node.left : node.right;
+            }
+            else {
+                Node successor = minValueNode(node.right);
+
+                node.score = successor.score;
+
+                node.right = delete(node.right, successor.score);
+            }
+        }
+
+        if (node == null)
+            return null;
+
+        return rebalance(node);
+    }
+
+    private Node minValueNode(Node node) {
+        while (node.left != null)
+            node = node.left;
+        return node;
+    }
+
+    // ---------- Score Update ----------
+
+    public void updateScore(int oldScore, int newScore) {
+        delete(oldScore);
+        insert(newScore);
+    }
+
+    // ---------- Rank Query ----------
+    // Rank 1 = highest score
+
+    public int getRank(int score) {
+        return getRank(root, score);
+    }
+
+    private int getRank(Node node, int score) {
+
+        if (node == null)
+            return -1;
+
+        if (score > node.score) {
+            return getRank(node.right, score);
+        }
+
+        if (score < node.score) {
+            int rank = getRank(node.left, score);
+
+            if (rank == -1)
+                return -1;
+
+            return size(node.right) + 1 + rank;
+        }
+
+        return size(node.right) + 1;
+    }
+
+    // ---------- Top K ----------
+
+    public List<Integer> topK(int k) {
+        List<Integer> result = new ArrayList<>();
+        reverseInorder(root, result, k);
+        return result;
+    }
+
+    private void reverseInorder(Node node,
+                                List<Integer> result,
+                                int k) {
+
+        if (node == null || result.size() >= k)
+            return;
+
+        reverseInorder(node.right, result, k);
+
+        if (result.size() < k)
+            result.add(node.score);
+
+        reverseInorder(node.left, result, k);
+    }
+
+    // ---------- Demo ----------
+
+    public static void main(String[] args) {
+
+        QuizClashLeaderboard tree = new QuizClashLeaderboard();
+
+        int[] scores = {
+            820, 540, 910, 770, 880,
+            460, 990, 600, 730, 950, 510
+        };
+
+        for (int s : scores)
+            tree.insert(s);
+
+        // Tournament updates
+        tree.updateScore(540, 815);
+        tree.updateScore(910, 685);
+
+        System.out.println("Top 5: " + tree.topK(5));
+
+        System.out.println("Rank of 990 = "
+                + tree.getRank(990));
+
+        System.out.println("Rank of 815 = "
+                + tree.getRank(815));
+
+        System.out.println("Rank of 685 = "
+                + tree.getRank(685));
+    }
+}
