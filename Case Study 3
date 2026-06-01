@@ -1,0 +1,261 @@
+import java.util.*;
+
+public class GridRedundancyPlanner {
+
+    static class Edge {
+        String u, v;
+        int cost;
+        boolean inMST;
+
+        Edge(String u, String v, int cost) {
+            this.u = u;
+            this.v = v;
+            this.cost = cost;
+            this.inMST = false;
+        }
+
+        @Override
+        public String toString() {
+            return u + " - " + v + " (" + cost + ")";
+        }
+    }
+
+    // ---------- DSU for Kruskal ----------
+
+    static class DSU {
+        int[] parent, rank;
+
+        DSU(int n) {
+            parent = new int[n];
+            rank = new int[n];
+
+            for (int i = 0; i < n; i++)
+                parent[i] = i;
+        }
+
+        int find(int x) {
+            if (parent[x] != x)
+                parent[x] = find(parent[x]);
+            return parent[x];
+        }
+
+        boolean union(int a, int b) {
+            int pa = find(a);
+            int pb = find(b);
+
+            if (pa == pb)
+                return false;
+
+            if (rank[pa] < rank[pb])
+                parent[pa] = pb;
+            else if (rank[pa] > rank[pb])
+                parent[pb] = pa;
+            else {
+                parent[pb] = pa;
+                rank[pa]++;
+            }
+            return true;
+        }
+    }
+
+    static Map<String, Integer> nodeId = new HashMap<>();
+    static List<String> idToNode = new ArrayList<>();
+
+    static int getNodeId(String name) {
+        if (!nodeId.containsKey(name)) {
+            nodeId.put(name, nodeId.size());
+            idToNode.add(name);
+        }
+        return nodeId.get(name);
+    }
+
+    // ---------- Build MST ----------
+
+    static List<Edge> buildMST(List<Edge> edges, int n) {
+
+        edges.sort(Comparator.comparingInt(e -> e.cost));
+
+        DSU dsu = new DSU(n);
+
+        List<Edge> mst = new ArrayList<>();
+
+        for (Edge e : edges) {
+
+            int u = getNodeId(e.u);
+            int v = getNodeId(e.v);
+
+            if (dsu.union(u, v)) {
+                e.inMST = true;
+                mst.add(e);
+            }
+        }
+
+        return mst;
+    }
+
+    // ---------- Find path in MST ----------
+
+    static boolean dfs(
+            String curr,
+            String target,
+            Map<String, List<Edge>> graph,
+            Set<String> visited,
+            List<Edge> path) {
+
+        if (curr.equals(target))
+            return true;
+
+        visited.add(curr);
+
+        for (Edge e : graph.getOrDefault(curr, new ArrayList<>())) {
+
+            String next = e.u.equals(curr) ? e.v : e.u;
+
+            if (visited.contains(next))
+                continue;
+
+            path.add(e);
+
+            if (dfs(next, target, graph, visited, path))
+                return true;
+
+            path.remove(path.size() - 1);
+        }
+
+        return false;
+    }
+
+    // ---------- Augment MST ----------
+
+    static List<Edge> augmentMST(
+            List<Edge> allEdges,
+            List<Edge> mst) {
+
+        Map<String, List<Edge>> mstGraph = new HashMap<>();
+
+        for (Edge e : mst) {
+
+            mstGraph.computeIfAbsent(e.u, k -> new ArrayList<>()).add(e);
+            mstGraph.computeIfAbsent(e.v, k -> new ArrayList<>()).add(e);
+        }
+
+        Set<Edge> protectedEdges = new HashSet<>();
+
+        List<Edge> nonMST = new ArrayList<>();
+
+        for (Edge e : allEdges)
+            if (!e.inMST)
+                nonMST.add(e);
+
+        nonMST.sort(Comparator.comparingInt(e -> e.cost));
+
+        List<Edge> additions = new ArrayList<>();
+
+        while (protectedEdges.size() < mst.size()) {
+
+            Edge bestEdge = null;
+            List<Edge> bestCycle = null;
+            int bestCoverage = 0;
+
+            for (Edge e : nonMST) {
+
+                if (additions.contains(e))
+                    continue;
+
+                List<Edge> cyclePath = new ArrayList<>();
+
+                dfs(
+                        e.u,
+                        e.v,
+                        mstGraph,
+                        new HashSet<>(),
+                        cyclePath
+                );
+
+                int uncovered = 0;
+
+                for (Edge mstEdge : cyclePath)
+                    if (!protectedEdges.contains(mstEdge))
+                        uncovered++;
+
+                if (uncovered > bestCoverage) {
+                    bestCoverage = uncovered;
+                    bestEdge = e;
+                    bestCycle = cyclePath;
+                }
+            }
+
+            if (bestEdge == null)
+                break;
+
+            additions.add(bestEdge);
+
+            protectedEdges.addAll(bestCycle);
+        }
+
+        return additions;
+    }
+
+    public static void main(String[] args) {
+
+        List<Edge> edges = new ArrayList<>();
+
+        /*
+           Replace with your actual 12 candidate cables.
+
+           Example format:
+           edges.add(new Edge("M","A",4));
+           edges.add(new Edge("M","B",3));
+        */
+
+        edges.add(new Edge("M", "A", 4));
+        edges.add(new Edge("M", "B", 3));
+        edges.add(new Edge("A", "C", 5));
+        edges.add(new Edge("B", "C", 4));
+        edges.add(new Edge("B", "D", 6));
+        edges.add(new Edge("C", "D", 2));
+        edges.add(new Edge("C", "E", 7));
+        edges.add(new Edge("D", "E", 2));
+        edges.add(new Edge("D", "F", 3));
+        edges.add(new Edge("E", "F", 3));
+        edges.add(new Edge("E", "G", 2));
+        edges.add(new Edge("F", "G", 4));
+
+        for (Edge e : edges) {
+            getNodeId(e.u);
+            getNodeId(e.v);
+        }
+
+        int n = nodeId.size();
+
+        List<Edge> mst = buildMST(edges, n);
+
+        int mstCost = 0;
+
+        System.out.println("===== MST =====");
+
+        for (Edge e : mst) {
+            System.out.println(e);
+            mstCost += e.cost;
+        }
+
+        System.out.println("MST Cost = " + mstCost);
+
+        List<Edge> extra = augmentMST(edges, mst);
+
+        int augmentationCost = 0;
+
+        System.out.println("\n===== Additional Cables =====");
+
+        for (Edge e : extra) {
+            System.out.println(e);
+            augmentationCost += e.cost;
+        }
+
+        System.out.println("\nAugmentation Cost = "
+                + augmentationCost);
+
+        System.out.println("Total Network Cost = "
+                + (mstCost + augmentationCost));
+    }
+}
